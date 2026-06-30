@@ -70,12 +70,12 @@ def ejecutar_pruebas(muestras, distribucion, alpha=0.05):
     resultados = {}
 
     try:
-        resultados["Kolmogorov_Smirnov"] = prueba_K_Smirnov(muestras, alpha=alpha)
+        resultados["K_Smirnov"] = prueba_K_Smirnov(muestras, alpha=alpha)
     except Exception as e:
-        resultados["Kolmogorov_Smirnov"] = {"error": str(e)}
+        resultados["K_Smirnov"] = {"error": str(e)}
 
     if distribucion == "uniforme":
-        sigma_0 = 1 / (2 * (3 ** 0.5))
+        sigma_0 = 1 / (12 ** 0.5) # Raiz de 1/12  
         mu_0 = 0.5
 
         try:
