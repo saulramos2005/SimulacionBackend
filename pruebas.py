@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.stats import chi2, norm
 
-
 def _to_native(val):
     if isinstance(val, (np.floating,)):
         return float(val)
@@ -30,6 +29,7 @@ def prueba_K_Smirnov(datos, a=0.0, b=1.0, alpha=0.05):
     max_d_neg = np.max(d_neg)
     d_stat = max(max_d_pos, max_d_neg)
 
+    # ~1.36/sqrt(n) reescrito
     d_critico = np.sqrt(-0.5 * np.log(alpha / 2)) / np.sqrt(n)
 
     resultado = {
@@ -54,9 +54,9 @@ def prueba_Varianza(datos, sigma_0=np.sqrt(1/12), alpha=0.05):
     n = len(datos)
     s2 = np.var(datos, ddof=1)
 
-    chi2_stat = (n - 1) * s2 / (sigma_0 ** 2)
     gl = n - 1
-
+    chi2_stat = gl * s2 / (sigma_0 ** 2)
+    
     # Al ser siempre a dos colas, calculas ambos límites del intervalo
     chi2_inf = chi2.ppf(alpha / 2, gl)
     chi2_sup = chi2.ppf(1 - alpha / 2, gl)
@@ -88,11 +88,11 @@ def prueba_Varianza(datos, sigma_0=np.sqrt(1/12), alpha=0.05):
 def prueba_Media(datos, mu_0=0.5, sigma=None, alpha=0.05):
     datos = np.array(datos)
     n = len(datos)
-    x_bar = np.mean(datos)
+    x_barra = np.mean(datos)
     s = np.std(datos, ddof=1)
 
     if sigma is not None:
-        estadistico = (x_bar - mu_0) / (sigma / np.sqrt(n))
+        estadistico = (x_barra - mu_0) / (sigma / np.sqrt(n))
         dist = "Z"
         gl = None
         
@@ -101,7 +101,7 @@ def prueba_Media(datos, mu_0=0.5, sigma=None, alpha=0.05):
         critico = (_to_native(round(-z_crit, 6)), _to_native(round(z_crit, 6)))
         p_valor = 2 * (1 - norm.cdf(abs(estadistico)))
     else:
-        estadistico = (x_bar - mu_0) / (s / np.sqrt(n))
+        estadistico = (x_barra - mu_0) / (s / np.sqrt(n))
         gl = n - 1
         dist = "t"
         from scipy.stats import t as t_dist
@@ -114,7 +114,7 @@ def prueba_Media(datos, mu_0=0.5, sigma=None, alpha=0.05):
     resultado = {
         "distribucion": dist,
         "estadistico": _to_native(round(estadistico, 6)),
-        "media_muestral": _to_native(round(x_bar, 6)),
+        "media_muestral": _to_native(round(x_barra, 6)),
         "valor_critico": critico,
         "p_valor": _to_native(round(p_valor, 6)),
         "rechazar_H0": rechazar,
@@ -153,9 +153,9 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
     secuencia_b = (datos_filtrados > umbral).astype(int)
 
     n1 = np.sum(secuencia_b == 1)
-    n2 = np.sum(secuencia_b == 0)
+    n0 = np.sum(secuencia_b == 0)
 
-    if n1 == 0 or n2 == 0:
+    if n1 == 0 or n0 == 0:
         raise ValueError("La secuencia binarizada no tiene variación; no se puede calcular la prueba.")
 
     rachas = 1
@@ -163,8 +163,8 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
         if secuencia_b[i] != secuencia_b[i - 1]:
             rachas += 1
 
-    mu_r = (2 * n1 * n2) / (n1 + n2) + 1
-    sigma_r = np.sqrt((2 * n1 * n2 * (2 * n1 * n2 - n1 - n2)) / ((n1 + n2) ** 2 * (n1 + n2 - 1)))
+    mu_r = (2 * n1 * n0) / (n1 + n0) + 1
+    sigma_r = np.sqrt((2 * n1 * n0 * (2 * n1 * n0 - n1 - n0)) / ((n1 + n0) ** 2 * (n1 + n0 - 1)))
 
     z_stat = (rachas - mu_r) / sigma_r
     z_crit = norm.ppf(1 - alpha / 2)
@@ -176,7 +176,7 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
         "rachas_observadas": int(rachas),
         "rachas_esperadas": _to_native(round(mu_r, 6)),
         "n1": int(n1),
-        "n2": int(n2),
+        "n2": int(n0),
         "estadistico_Z": _to_native(round(z_stat, 6)),
         "valor_critico_Z": _to_native(round(z_crit, 6)),
         "p_valor": _to_native(round(p_valor, 6)),
