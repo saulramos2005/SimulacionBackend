@@ -117,8 +117,8 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
         if secuencia_b[i] != secuencia_b[i - 1]:
             rachas += 1
 
-    mu_r = (2 * n1 * n0) / (n1 + n0) + 1
-    sigma_r = np.sqrt((2 * n1 * n0 * (2 * n1 * n0 - n1 - n0)) / ((n1 + n0) ** 2 * (n1 + n0 - 1)))
+    mu_r = (2 * n1 * n0) / (n1 + n0) + 1 # Media esperada
+    sigma_r = np.sqrt((2 * n1 * n0 * (2 * n1 * n0 - n1 - n0)) / ((n1 + n0) ** 2 * (n1 + n0 - 1))) # Desviacion estandar esperada 
 
     z_estadistico = (rachas - mu_r) / sigma_r
     z_crit = norm.ppf(1 - alpha / 2)
