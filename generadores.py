@@ -37,20 +37,24 @@ def generarCuadradosMedios(seed: int = 3708, d: int = 4, n: int = 100):
     cont = 0
     resultados = []
     numero = seed
-    
+
     while cont < n:
         cuadrado = str(numero**2)
-        longitud_esperada = max(len(cuadrado), 2 * d)
+        
+        # Nos aseguramos de que al menos tenga 'd' dígitos.
+        longitud_esperada = max(len(cuadrado), d)
+        
+        # Si la diferencia no es par, sumamos 1 para poder extraer exactamente del centro
         if (longitud_esperada - d) % 2 != 0:
             longitud_esperada += 1 
-            
+
         numero_str = cuadrado.zfill(longitud_esperada)
-        
+
         a = (len(numero_str) - d) // 2
         b = a + d 
-        
+
         numero = int(numero_str[a:b])
         resultados.append(numero / (10**d))
         cont += 1
-        
+
     return resultados
