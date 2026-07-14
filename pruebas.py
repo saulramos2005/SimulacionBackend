@@ -147,7 +147,7 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
     }
     return resultado
 
-def prueba_Media(datos, mu_0=0.5, sigma=None, alpha=0.05):
+def prueba_Media(datos, mu_0=0.5, sigma=(1/np.sqrt(12)), alpha=0.05):
     datos = np.array(datos)
     n = len(datos)
     gl = n - 1
