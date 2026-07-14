@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import chi2, norm
+from scipy.stats import chi2, norm, t as t_dist
 
 def _to_native(val):
     if isinstance(val, (np.floating,)):
@@ -12,33 +12,32 @@ def _to_native(val):
         return val.tolist()
     return val
 
-
 def prueba_K_Smirnov(datos, a=0.0, b=1.0, alpha=0.05):
     datos = np.sort(datos)
     n = len(datos)
 
     f_teorica = (datos - a) / (b - a)
 
-    f_empirica = np.arange(1, n + 1) / n
-    f_empirica_ant = np.arange(0, n) / n
+    f_empirica = np.arange(1, n + 1) / n # i/n
+    f_empirica_ant = np.arange(0, n) / n # (i-1)/n
 
-    d_pos = f_empirica - f_teorica
-    d_neg = f_teorica - f_empirica_ant
+    d_pos = f_empirica - f_teorica # i/n - F0(x_i)
+    d_neg = f_teorica - f_empirica_ant # F0(x_i) - (i-1)/n
     
     max_d_pos = np.max(d_pos)
     max_d_neg = np.max(d_neg)
-    d_stat = max(max_d_pos, max_d_neg)
+    d_estadistico = max(max_d_pos, max_d_neg)
 
     # ~1.36/sqrt(n) reescrito
     d_critico = np.sqrt(-0.5 * np.log(alpha / 2)) / np.sqrt(n)
 
     resultado = {
-        "estadistico_D": _to_native(round(d_stat, 6)),
+        "estadistico_D": _to_native(round(d_estadistico, 6)),
         "valor_critico": _to_native(round(d_critico, 6)),
-        "rechazar_H0": bool(d_stat > d_critico),
+        "rechazar_H0": bool(d_estadistico > d_critico),
         "interpretacion": (
             f"Se rechaza H0: los datos NO provienen de una distribución uniforme ({a}, {b})"
-            if d_stat > d_critico
+            if d_estadistico > d_critico
             else f"No se rechaza H0: los datos podrían provenir de una distribución uniforme ({a}, {b})"
         ),
         "frecuencia_teorica": _to_native(np.round(f_teorica, 6)),
@@ -55,19 +54,19 @@ def prueba_Varianza(datos, sigma_0=np.sqrt(1/12), alpha=0.05):
     s2 = np.var(datos, ddof=1)
 
     gl = n - 1
-    chi2_stat = gl * s2 / (sigma_0 ** 2)
+    chi2_estadistico = gl * s2 / (sigma_0 ** 2)
     
-    # Al ser siempre a dos colas, calculas ambos límites del intervalo
+    # Al ser a dos colas, se calculan ambos límites del intervalo
     chi2_inf = chi2.ppf(alpha / 2, gl)
     chi2_sup = chi2.ppf(1 - alpha / 2, gl)
     
     # Se rechaza si cae fuera del intervalo [chi2_inf, chi2_sup]
-    rechazar = bool((chi2_stat < chi2_inf) or (chi2_stat > chi2_sup))
+    rechazar = bool((chi2_estadistico < chi2_inf) or (chi2_estadistico > chi2_sup))
     critico = (_to_native(round(chi2_inf, 6)), _to_native(round(chi2_sup, 6)))
-    p_valor = 2 * min(chi2.cdf(chi2_stat, gl), 1 - chi2.cdf(chi2_stat, gl))
+    p_valor = 2 * min(chi2.cdf(chi2_estadistico, gl), 1 - chi2.cdf(chi2_estadistico, gl))
 
     resultado = {
-        "valor_estadistico": _to_native(round(chi2_stat, 6)),
+        "valor_estadistico": _to_native(round(chi2_estadistico, 6)),
         "grados_libertad": gl,
         "valor_critico": critico,
         "p_valor": _to_native(round(p_valor, 6)),
@@ -82,51 +81,6 @@ def prueba_Varianza(datos, sigma_0=np.sqrt(1/12), alpha=0.05):
         "varianza_teorica_esperada": _to_native(round(sigma_0 ** 2, 6)),
         "chi2_limite_inferior": _to_native(round(chi2_inf, 6)),
         "chi2_limite_superior": _to_native(round(chi2_sup, 6)),
-    }
-    return resultado
-
-def prueba_Media(datos, mu_0=0.5, sigma=None, alpha=0.05):
-    datos = np.array(datos)
-    n = len(datos)
-    x_barra = np.mean(datos)
-    s = np.std(datos, ddof=1)
-
-    if sigma is not None:
-        estadistico = (x_barra - mu_0) / (sigma / np.sqrt(n))
-        dist = "Z"
-        gl = None
-        
-        z_crit = norm.ppf(1 - alpha / 2)
-        rechazar = bool(abs(estadistico) > z_crit)
-        critico = (_to_native(round(-z_crit, 6)), _to_native(round(z_crit, 6)))
-        p_valor = 2 * (1 - norm.cdf(abs(estadistico)))
-    else:
-        estadistico = (x_barra - mu_0) / (s / np.sqrt(n))
-        gl = n - 1
-        dist = "t"
-        from scipy.stats import t as t_dist
-        
-        t_crit_val = t_dist.ppf(1 - alpha / 2, gl)
-        rechazar = bool(abs(estadistico) > t_crit_val)
-        critico = (_to_native(round(-t_crit_val, 6)), _to_native(round(t_crit_val, 6)))
-        p_valor = 2 * (1 - t_dist.cdf(abs(estadistico), gl))
-
-    resultado = {
-        "distribucion": dist,
-        "estadistico": _to_native(round(estadistico, 6)),
-        "media_muestral": _to_native(round(x_barra, 6)),
-        "valor_critico": critico,
-        "p_valor": _to_native(round(p_valor, 6)),
-        "rechazar_H0": rechazar,
-        "interpretacion": (
-            f"Se rechaza H0: la media poblacional difiere significativamente de {mu_0}"
-            if rechazar
-            else f"No se rechaza H0: la media es estadísticamente igual a {mu_0}"
-        ),
-        "grados_libertad": gl,
-        "desviacion_estandar_muestral": _to_native(round(s, 6)),
-        "error_estandar_media": _to_native(round((sigma if sigma is not None else s) / np.sqrt(n), 6)),
-        "media_esperada_H0": mu_0
     }
     return resultado
 
@@ -166,18 +120,18 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
     mu_r = (2 * n1 * n0) / (n1 + n0) + 1
     sigma_r = np.sqrt((2 * n1 * n0 * (2 * n1 * n0 - n1 - n0)) / ((n1 + n0) ** 2 * (n1 + n0 - 1)))
 
-    z_stat = (rachas - mu_r) / sigma_r
+    z_estadistico = (rachas - mu_r) / sigma_r
     z_crit = norm.ppf(1 - alpha / 2)
 
-    p_valor = 2 * (1 - norm.cdf(abs(z_stat)))
-    rechazar = bool(abs(z_stat) > z_crit)
+    p_valor = 2 * (1 - norm.cdf(abs(z_estadistico)))
+    rechazar = bool(abs(z_estadistico) > z_crit)
 
     resultado = {
         "rachas_observadas": int(rachas),
         "rachas_esperadas": _to_native(round(mu_r, 6)),
         "n1": int(n1),
         "n2": int(n0),
-        "estadistico_Z": _to_native(round(z_stat, 6)),
+        "estadistico_Z": _to_native(round(z_estadistico, 6)),
         "valor_critico_Z": _to_native(round(z_crit, 6)),
         "p_valor": _to_native(round(p_valor, 6)),
         "rechazar_H0": rechazar,
@@ -190,5 +144,44 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
         "criterio": criterio,
         "secuencia_binaria": _to_native(secuencia_b),
         "desviacion_estandar_R": _to_native(round(sigma_r, 6)),
+    }
+    return resultado
+
+def prueba_Media(datos, mu_0=0.5, sigma=None, alpha=0.05):
+    datos = np.array(datos)
+    n = len(datos)
+    gl = n - 1
+    x_barra = np.mean(datos)
+
+    if sigma is not None:
+        desviacion = sigma
+        critico = norm.ppf(1 - alpha / 2)
+        dist = "Z"
+    else:
+        desviacion = np.std(datos, ddof=1)
+        critico = t_dist.ppf(1 - alpha / 2, gl)
+        dist = "t"
+
+    estadistico = (x_barra - mu_0) / (desviacion / np.sqrt(n))
+    rechazar = bool(abs(estadistico) > critico)
+    tupla = (_to_native(round(-critico, 6)), _to_native(round(critico, 6)))
+    p_valor = 2 * (1- (norm.cdf(abs(estadistico)) if sigma is not None else t_dist.cdf(abs(estadistico), gl)))
+
+    resultado = {
+        "distribucion": dist,
+        "estadistico": _to_native(round(estadistico, 6)),
+        "media_muestral": _to_native(round(x_barra, 6)),
+        "valor_critico": tupla,
+        "p_valor": _to_native(round(p_valor, 6)),
+        "rechazar_H0": rechazar,
+        "interpretacion": (
+            f"Se rechaza H0: la media poblacional difiere significativamente de {mu_0}"
+            if rechazar
+            else f"No se rechaza H0: la media es estadísticamente igual a {mu_0}"
+        ),
+        "grados_libertad": gl,
+        "desviacion_estandar_muestral": _to_native(round(desviacion, 6)),
+        "error_estandar_media": _to_native(round((sigma if sigma is not None else desviacion) / np.sqrt(n), 6)),
+        "media_esperada_H0": mu_0
     }
     return resultado
