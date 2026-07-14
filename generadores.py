@@ -9,14 +9,14 @@ def obtener_numeros_u(metodo: MetodoGeneracion, n: int, parametros: dict = None)
     parametros = parametros or {}
     if metodo == MetodoGeneracion.congruencial:
         return generarCongruencial(
-            seed=parametros.get("semilla", 16807),
+            seed=parametros.get("seed", 16807),
             mult=parametros.get("mult", 48271),
             mod=parametros.get("mod", 2147483647),
             n=n
         )
     elif metodo == MetodoGeneracion.medios_cuadrados:
         return generarCuadradosMedios(
-            seed=parametros.get("semilla", 3708),
+            seed=parametros.get("seed", 3708),
             d=parametros.get("d", 4),
             n=n
         )
