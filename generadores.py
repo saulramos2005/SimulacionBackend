@@ -29,7 +29,7 @@ def generarCongruencial(seed: int = 16807, mult: int = 48271, mod: int = 2147483
     numero = seed
     while cont < n:
         numero = (numero*mult) % mod
-        resultados.append(numero/mod)
+        resultados.append(numero/mod-1)
         cont += 1
     return resultados
 
