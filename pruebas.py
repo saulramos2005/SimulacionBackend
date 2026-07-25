@@ -12,11 +12,32 @@ def _to_native(val):
         return val.tolist()
     return val
 
-def prueba_K_Smirnov(datos, a=0.0, b=1.0, alpha=0.05):
+# --- AUXILIARES PARA K-S ---
+
+def fda_erlang(datos, parametros):
+    lam = float(parametros.get("lam", 1.0))
+    k = int(parametros.get("k", 1))
+    return 1 - np.sum([np.exp(-lam * datos) * ((lam * datos)**i) / np.math.factorial(i) for i in range(k)], axis=0)
+
+CALCULADORAS_FDA = {
+    "uniforme": lambda d, p: (d - float(p.get("a", 0.0))) / (float(p.get("b", 1.0)) - float(p.get("a", 0.0))),
+    "exponencial": lambda d, p: 1 - np.exp(-float(p.get("lam", 1.0)) * d),
+    "normal": lambda d, p: norm.cdf(d, loc=float(p.get("mu", 0.0)), scale=float(p.get("sigma", 1.0))),
+    "erlang": fda_erlang
+}
+
+def prueba_K_Smirnov(datos, distribucion="uniforme", parametros=None, alpha=0.05):
+    if parametros is None:
+        parametros = {}
+        
     datos = np.sort(datos)
     n = len(datos)
 
-    f_teorica = (datos - a) / (b - a)
+    if distribucion not in CALCULADORAS_FDA:
+        raise ValueError(f"La prueba K-S manual no es válida o no está implementada para la distribución '{distribucion}'.")
+
+    f_teorica = CALCULADORAS_FDA[distribucion](datos, parametros)
+
 
     f_empirica = np.arange(1, n + 1) / n # i/n
     f_empirica_ant = np.arange(0, n) / n # (i-1)/n
@@ -36,9 +57,9 @@ def prueba_K_Smirnov(datos, a=0.0, b=1.0, alpha=0.05):
         "valor_critico": _to_native(round(d_critico, 6)),
         "rechazar_H0": bool(d_estadistico > d_critico),
         "interpretacion": (
-            f"Se rechaza H0: los datos NO provienen de una distribución uniforme ({a}, {b})"
+            f"Se rechaza H0: los datos NO provienen de una distribución {distribucion}"
             if d_estadistico > d_critico
-            else f"No se rechaza H0: los datos podrían provenir de una distribución uniforme ({a}, {b})"
+            else f"No se rechaza H0: los datos podrían provenir de una distribución {distribucion}"
         ),
         "frecuencia_teorica": _to_native(np.round(f_teorica, 6)),
         "frecuencia_empirica": _to_native(f_empirica),
@@ -87,24 +108,28 @@ def prueba_Varianza(datos, sigma_0=np.sqrt(1/12), alpha=0.05):
 def prueba_Racha(datos, criterio="mediana", alpha=0.05):
     datos = np.array(datos)
     
-    if criterio == "mediana":
-        umbral = np.median(datos)
-    elif criterio == "media":
-        umbral = np.mean(datos)
-    elif isinstance(criterio, (int, float)):
-        umbral = criterio
+    valores_unicos = np.unique(datos)
+    es_binaria = len(valores_unicos) <= 2 and set(valores_unicos).issubset({0, 1})
+    
+    if es_binaria:
+        secuencia_b = datos.astype(int)
+        umbral = "Binario natural (0 y 1)"
     else:
-        raise ValueError("criterio debe ser 'mediana', 'media' o un valor numérico")
+        if criterio == "mediana":
+            umbral = np.median(datos)
+        elif criterio == "media":
+            umbral = np.mean(datos)
+        elif isinstance(criterio, (int, float)):
+            umbral = criterio
+        else:
+            raise ValueError("criterio debe ser 'mediana', 'media' o un valor numérico")
 
-    # Eliminamos los valores que son exactamente iguales al umbral.
-    # En continuas no afectará casi nada; en discretas salvará la simetría de la prueba.
-    datos_filtrados = datos[datos != umbral]
-    n = len(datos_filtrados)
+        datos_filtrados = datos[datos != umbral]
+        
+        if len(datos_filtrados) == 0:
+            raise ValueError("La secuencia no tiene variación suficiente para realizar la prueba de rachas.")
 
-    if n == 0:
-        raise ValueError("La secuencia no tiene variación suficiente para realizar la prueba de rachas.")
-
-    secuencia_b = (datos_filtrados > umbral).astype(int)
+        secuencia_b = (datos_filtrados > umbral).astype(int)
 
     n1 = np.sum(secuencia_b == 1)
     n0 = np.sum(secuencia_b == 0)
@@ -112,13 +137,14 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
     if n1 == 0 or n0 == 0:
         raise ValueError("La secuencia binarizada no tiene variación; no se puede calcular la prueba.")
 
+    n = len(secuencia_b)
     rachas = 1
     for i in range(1, n):
         if secuencia_b[i] != secuencia_b[i - 1]:
             rachas += 1
 
-    mu_r = (2 * n1 * n0) / (n1 + n0) + 1 # Media esperada
-    sigma_r = np.sqrt((2 * n1 * n0 * (2 * n1 * n0 - n1 - n0)) / ((n1 + n0) ** 2 * (n1 + n0 - 1))) # Desviacion estandar esperada 
+    mu_r = (2 * n1 * n0) / (n1 + n0) + 1 
+    sigma_r = np.sqrt((2 * n1 * n0 * (2 * n1 * n0 - n1 - n0)) / ((n1 + n0) ** 2 * (n1 + n0 - 1))) 
 
     z_estadistico = (rachas - mu_r) / sigma_r
     z_crit = norm.ppf(1 - alpha / 2)
@@ -140,7 +166,7 @@ def prueba_Racha(datos, criterio="mediana", alpha=0.05):
             if rechazar
             else "No se rechaza H0: la secuencia parece ser aleatoria"
         ),
-        "umbral_utilizado": _to_native(round(umbral, 6)),
+        "umbral_utilizado": _to_native(umbral) if isinstance(umbral, str) else _to_native(round(umbral, 6)),
         "criterio": criterio,
         "secuencia_binaria": _to_native(secuencia_b),
         "desviacion_estandar_R": _to_native(round(sigma_r, 6)),

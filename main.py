@@ -4,20 +4,20 @@ from pydantic import BaseModel, Field
 from typing import Literal, Optional
 
 
-from distribuciones import inversa_uniforme
+from distribuciones import DISTRIBUCIONES, PARAMETROS_TEORICOS
 from generadores import *
 from pruebas import prueba_K_Smirnov, prueba_Varianza, prueba_Media, prueba_Racha
 
 
 class SimulacionRequest(BaseModel):
     metodo: Literal["congruencial", "medios_cuadrados"]
-    distribucion: Literal["uniforme", "exponencial"]
+    distribucion: Literal[
+        "uniforme", "exponencial", "normal", "erlang", 
+        "bernoulli", "binomial", "poisson"
+    ]
     n: int = Field(100, gt=0)
     parametros: dict
-    a: Optional[float] = None
-    b: Optional[float] = None
     alpha: float = 0.05
-
 
 app = FastAPI(
     title="Laboratorio Estadistico API",
@@ -47,46 +47,59 @@ def read_root():
 
 @app.post("/muestras/generar")
 def generar_muestras(request: SimulacionRequest):
-
-    u = obtener_numeros_u(request.metodo, request.n, request.parametros)
-
-    if request.distribucion == "uniforme":
-        a = request.a if request.a is not None else request.parametros.get("a", 0.0)
-        b = request.b if request.b is not None else request.parametros.get("b", 1.0)
-        muestras = [inversa_uniforme(val, a, b) for val in u]
-    else:
+    nombre_dist = request.distribucion
+    
+    if nombre_dist not in DISTRIBUCIONES:
         raise HTTPException(status_code=400, detail="Distribución no soportada")
+        
+    config_dist = DISTRIBUCIONES[nombre_dist]
+    
+    u_por_muestra = config_dist["u_req"](request.parametros)
+    total_u_requeridos = request.n * u_por_muestra
 
-    pruebas = ejecutar_pruebas(muestras, request.distribucion, request.alpha)
+    us_generados = obtener_numeros_u(request.metodo, total_u_requeridos, request.parametros)
+    
+    muestras = []
+    for i in range(request.n):
+        inicio = i * u_por_muestra
+        fin = inicio + u_por_muestra
+        bloque_us = us_generados[inicio:fin]
+        
+        muestra_calculada = config_dist["func"](bloque_us, request.parametros)
+        muestras.append(muestra_calculada)
+
+    pruebas = ejecutar_pruebas(muestras, nombre_dist, request.parametros, request.alpha)
 
     return {
         "meta": request.dict(),
-        "data": muestras,
+        "u": us_generados, 
+        "x": muestras,
         "pruebas": pruebas
     }
 
-
-def ejecutar_pruebas(muestras, distribucion, alpha=0.05):
+def ejecutar_pruebas(muestras, distribucion, parametros, alpha=0.05):
     resultados = {}
 
     try:
-        resultados["K_Smirnov"] = prueba_K_Smirnov(muestras, alpha=alpha)
+        resultados["K_Smirnov"] = prueba_K_Smirnov(muestras, distribucion, parametros, alpha=alpha)
     except Exception as e:
         resultados["K_Smirnov"] = {"error": str(e)}
+    
+    if distribucion in PARAMETROS_TEORICOS:
+        mu_0, sigma_0 = PARAMETROS_TEORICOS[distribucion](parametros)
+    else:
+        mu_0 = 0.5 
+        sigma_0 = 1 / (12**0.5) 
+    
+    try:
+        resultados["Varianza"] = prueba_Varianza(muestras, sigma_0=sigma_0, alpha=alpha)
+    except Exception as e:
+        resultados["Varianza"] = {"error": str(e)}
 
-    if distribucion == "uniforme":
-        sigma_0 = 1 / (12 ** 0.5) # Raiz de 1/12  
-        mu_0 = 0.5
-
-        try:
-            resultados["Varianza"] = prueba_Varianza(muestras, sigma_0=sigma_0, alpha=alpha)
-        except Exception as e:
-            resultados["Varianza"] = {"error": str(e)}
-
-        try:
-            resultados["Media"] = prueba_Media(muestras, mu_0=mu_0, alpha=alpha)
-        except Exception as e:
-            resultados["Media"] = {"error": str(e)}
+    try:
+        resultados["Media"] = prueba_Media(muestras, mu_0=mu_0, alpha=alpha)
+    except Exception as e:
+        resultados["Media"] = {"error": str(e)}
 
     try:
         resultados["Rachas"] = prueba_Racha(muestras, criterio="mediana", alpha=alpha)

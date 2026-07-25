@@ -7,29 +7,57 @@ class MetodoGeneracion(str, Enum):
 
 def obtener_numeros_u(metodo: MetodoGeneracion, n: int, parametros: dict = None) -> List[float]:
     parametros = parametros or {}
+    
     if metodo == MetodoGeneracion.congruencial:
-        return generarCongruencial(
-            seed=parametros.get("seed", 16807),
-            mult=parametros.get("mult", 48271),
-            mod=parametros.get("mod", 2147483647),
-            n=n
-        )
+        # Extraemos los parámetros comunes
+        seed = parametros.get("seed", 16807)
+        mult = parametros.get("mult", 48271)
+        mod = parametros.get("mod", 2147483647)
+        
+        # Decidimos qué generador usar según la presencia del parámetro aditivo
+        if "aditivo" in parametros:
+            return generarCongruencialMixto(
+                seed=seed, 
+                mult=mult, 
+                aditivo=parametros["aditivo"], 
+                mod=mod, 
+                n=n
+            )
+        else:
+            return generarCongruencial(
+                seed=seed, 
+                mult=mult, 
+                mod=mod, 
+                n=n
+            )
+            
     elif metodo == MetodoGeneracion.medios_cuadrados:
         return generarCuadradosMedios(
             seed=parametros.get("seed", 3708),
             d=parametros.get("d", 4),
             n=n
         )
+        
     return []
 
-
-def generarCongruencial(seed: int = 16807, mult: int = 48271, mod: int = 2147483647, n: int = 100 ):
+def generarCongruencial(seed: int = 16807, mult: int = 48271, mod: int = 2147483647, n: int = 100):
     cont = 0
     resultados = []
     numero = seed
     while cont < n:
         numero = (numero*mult) % mod
         resultados.append(numero/(mod-1))
+        cont += 1
+    return resultados
+
+def generarCongruencialMixto(seed: int, mult: int, aditivo: int, mod: int, n: int):
+    cont = 0
+    resultados = []
+    numero = seed
+    while cont < n:
+        numero = (numero * mult + aditivo) % mod
+        # Mantenemos el divisor (mod - 1) para ser consistentes con el multiplicativo original
+        resultados.append(numero / (mod - 1))
         cont += 1
     return resultados
 
