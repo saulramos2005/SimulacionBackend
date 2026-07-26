@@ -6,7 +6,7 @@ from typing import Literal, Optional
 
 from distribuciones import DISTRIBUCIONES, PARAMETROS_TEORICOS
 from generadores import *
-from pruebas import prueba_K_Smirnov, prueba_Varianza, prueba_Media, prueba_Racha
+from pruebas import prueba_Bondad_Ajuste, prueba_Varianza, prueba_Media, prueba_Racha
 
 
 class SimulacionRequest(BaseModel):
@@ -80,16 +80,16 @@ def generar_muestras(request: SimulacionRequest):
 def ejecutar_pruebas(muestras, distribucion, parametros, alpha=0.05):
     resultados = {}
 
-    try:
-        resultados["K_Smirnov"] = prueba_K_Smirnov(muestras, distribucion, parametros, alpha=alpha)
-    except Exception as e:
-        resultados["K_Smirnov"] = {"error": str(e)}
-    
     if distribucion in PARAMETROS_TEORICOS:
         mu_0, sigma_0 = PARAMETROS_TEORICOS[distribucion](parametros)
     else:
         mu_0 = 0.5 
         sigma_0 = 1 / (12**0.5) 
+            
+    try:
+        resultados["Bondad_Ajuste"] = prueba_Bondad_Ajuste(muestras, distribucion, parametros, alpha=alpha)
+    except Exception as e:
+        resultados["Bondad_Ajuste"] = {"error": str(e)}
     
     try:
         resultados["Varianza"] = prueba_Varianza(muestras, sigma_0=sigma_0, alpha=alpha)

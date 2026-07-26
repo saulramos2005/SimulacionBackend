@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from scipy.stats import chi2, norm, t as t_dist
 
@@ -26,6 +27,37 @@ CALCULADORAS_FDA = {
     "erlang": fda_erlang
 }
 
+# --- AUXILIARES PARA CHI-CUADRADO (DISCRETAS) ---
+
+def pmf_binomial(x, params):
+    p = float(params.get("p", 0.5))
+    n_e = int(params.get("n_ensayos", 1))
+    if x < 0 or x > n_e: return 0.0
+    return math.comb(n_e, int(x)) * (p**x) * ((1-p)**(n_e - x))
+
+def pmf_poisson(x, params):
+    lam = float(params.get("lam", 1.0))
+    if x < 0: return 0.0
+    return math.exp(-lam) * (lam**x) / math.factorial(int(x))
+
+CALCULADORAS_PMF = {
+    "bernoulli": lambda x, p: float(p.get("p", 0.5)) if x == 1 else (1 - float(p.get("p", 0.5)) if x == 0 else 0.0),
+    "binomial": pmf_binomial,
+    "poisson": pmf_poisson
+}
+
+def prueba_Bondad_Ajuste(datos, distribucion="uniforme", parametros=None, alpha=0.05):
+    """Decide automáticamente si usar K-S (continuas) o Chi2 (discretas)"""
+    if parametros is None:
+        parametros = {}
+        
+    if distribucion in CALCULADORAS_FDA:
+        return prueba_K_Smirnov(datos, distribucion, parametros, alpha)
+    elif distribucion in CALCULADORAS_PMF:
+        return prueba_ChiCuadrado_Ajuste(datos, distribucion, parametros, alpha)
+    else:
+        raise ValueError(f"Distribución '{distribucion}' no soportada para bondad de ajuste.")
+
 def prueba_K_Smirnov(datos, distribucion="uniforme", parametros=None, alpha=0.05):
     if parametros is None:
         parametros = {}
@@ -53,7 +85,8 @@ def prueba_K_Smirnov(datos, distribucion="uniforme", parametros=None, alpha=0.05
     d_critico = np.sqrt(-0.5 * np.log(alpha / 2)) / np.sqrt(n)
 
     resultado = {
-        "estadistico_D": _to_native(round(d_estadistico, 6)),
+        "nombre_prueba": "Kolmogorov-Smirnov",
+        "estadistico": _to_native(round(d_estadistico, 6)),
         "valor_critico": _to_native(round(d_critico, 6)),
         "rechazar_H0": bool(d_estadistico > d_critico),
         "interpretacion": (
@@ -61,11 +94,45 @@ def prueba_K_Smirnov(datos, distribucion="uniforme", parametros=None, alpha=0.05
             if d_estadistico > d_critico
             else f"No se rechaza H0: los datos podrían provenir de una distribución {distribucion}"
         ),
+        "diferencias_positivas": _to_native(np.round(d_pos, 6)),
+        "diferencias_negativas": _to_native(np.round(d_neg, 6)),
         "frecuencia_teorica": _to_native(np.round(f_teorica, 6)),
         "frecuencia_empirica": _to_native(f_empirica),
         "frecuencia_empirica_anterior": _to_native(f_empirica_ant),
-        "diferencias_positivas": _to_native(np.round(d_pos, 6)),
-        "diferencias_negativas": _to_native(np.round(d_neg, 6))
+    }
+    return resultado
+
+def prueba_ChiCuadrado_Ajuste(datos, distribucion, parametros, alpha=0.05):
+    datos = np.array(datos)
+    n = len(datos)
+    
+    valores_unicos, conteos_obs = np.unique(datos, return_counts=True)
+    
+    func_pmf = CALCULADORAS_PMF[distribucion]
+    probs_teoricas = np.array([func_pmf(x, parametros) for x in valores_unicos])
+    freq_esperadas = n * probs_teoricas
+    
+    # Evitar divisiones por cero en el estadístico
+    freq_esperadas = np.maximum(freq_esperadas, 1e-10)
+    
+    estadistico = np.sum(((conteos_obs - freq_esperadas)**2) / freq_esperadas)
+    
+    gl = len(valores_unicos) - 1
+    if gl < 1: gl = 1 # Salvavidas estadístico si todos los números generados son iguales
+    
+    critico = chi2.ppf(1 - alpha, gl)
+    rechazar = bool(estadistico > critico)
+
+    resultado = {
+        "nombre_prueba": "Chi-Cuadrado (Bondad de Ajuste)",
+        "estadistico": _to_native(round(estadistico, 6)), 
+        "valor_critico": _to_native(round(critico, 6)),
+        "rechazar_H0": rechazar,
+        "interpretacion": (
+            f"Se rechaza H0: los datos NO provienen de una distribución {distribucion}"
+            if rechazar else f"No se rechaza H0: los datos provienen de {distribucion}"
+        ),
+        "grados_libertad": gl
     }
     return resultado
 
