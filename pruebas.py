@@ -124,7 +124,7 @@ def prueba_ChiCuadrado_Ajuste(datos, distribucion, parametros, alpha=0.05):
     rechazar = bool(estadistico > critico)
 
     resultado = {
-        "nombre_prueba": "Chi-Cuadrado (Bondad de Ajuste)",
+        "nombre_prueba": "Chi-Cuadrado",
         "estadistico": _to_native(round(estadistico, 6)), 
         "valor_critico": _to_native(round(critico, 6)),
         "rechazar_H0": rechazar,
