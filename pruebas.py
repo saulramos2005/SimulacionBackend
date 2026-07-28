@@ -18,7 +18,7 @@ def _to_native(val):
 def fda_erlang(datos, parametros):
     lam = float(parametros.get("lam", 1.0))
     k = int(parametros.get("k", 1))
-    return 1 - np.sum([np.exp(-lam * datos) * ((lam * datos)**i) / np.math.factorial(i) for i in range(k)], axis=0)
+    return 1 - np.sum([np.exp(-lam * datos) * ((lam * datos)**i) / math.factorial(i) for i in range(k)], axis=0)
 
 CALCULADORAS_FDA = {
     "uniforme": lambda d, p: (d - float(p.get("a", 0.0))) / (float(p.get("b", 1.0)) - float(p.get("a", 0.0))),
